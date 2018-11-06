@@ -1,10 +1,10 @@
 /**
  * @file offboard_velocity.cpp
- * @brief offboard control between Pixhawk4 and RPi.
+ * @brief Example that demonstrates offboard velocity control in local NED and body coordinates
  *
- * @authors Author: 
- *                  
- * @date 
+ * @authors Author: Julian Oes <julian@oes.ch>,
+ *                  Shakthi Prashanth <shakthi.prashanth.m@intel.com>
+ * @date 2017-10-17
  */
 
 #include <chrono>
@@ -15,6 +15,11 @@
 #include <dronecode_sdk/telemetry.h>
 #include <iostream>
 #include <thread>
+#include "CYdLidar.h"
+
+using namespace std;
+using namespace ydlidar;
+CYdLidar laser;
 
 using namespace dronecode_sdk;
 using std::this_thread::sleep_for;
@@ -176,9 +181,19 @@ void usage(std::string bin_name)
 
 int main(int argc, char **argv)
 {
+	const string port = string(argv[1]);
+	const int baud = atoi(argv[2]);
+	const int intensities = atoi(argv[3]);
+
+	laser.setSerialPort(port);
+	laser.setSerialBaudrate(baud);
+	laser.setIntensities(intensities);
+	printf("Set Serial Port\n");
+	return 1;
     DronecodeSDK dc;
     std::string connection_url;
     ConnectionResult connection_result;
+
 
     if (argc == 2) {
         connection_url = argv[1];
