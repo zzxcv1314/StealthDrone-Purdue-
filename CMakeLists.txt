@@ -2,10 +2,10 @@ cmake_minimum_required(VERSION 2.8.12)
 
 project(offboard)
 
-
 if(NOT MSVC)
     #add_definitions("-std=c++11 -Wall -Wextra -Werror")
     add_definitions("-std=c++11")
+	find_package(Threads)
     # Line below required if /usr/local/include is not in your default includes
     #include_directories(/usr/local/include)
     # Line below required if /usr/local/lib is not in your default linker path
@@ -30,7 +30,9 @@ endif()
 
 add_executable(offboard
     offboard_velocity.cpp
+	lidar.cpp
 )
+
 
 target_link_libraries(offboard
     dronecode_sdk
@@ -38,4 +40,5 @@ target_link_libraries(offboard
     dronecode_sdk_offboard
     dronecode_sdk_telemetry
     ${YDLIDAR_LIBRARIES}
+	${CMAKE_THREAD_LIBS_INIT}
 )
