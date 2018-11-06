@@ -15,11 +15,7 @@
 #include <dronecode_sdk/telemetry.h>
 #include <iostream>
 #include <thread>
-#include "CYdLidar.h"
-
-using namespace std;
-using namespace ydlidar;
-CYdLidar laser;
+#include "lidar.h"
 
 using namespace dronecode_sdk;
 using std::this_thread::sleep_for;
@@ -181,15 +177,24 @@ void usage(std::string bin_name)
 
 int main(int argc, char **argv)
 {
-	const string port = string(argv[1]);
-	const int baud = atoi(argv[2]);
-	const int intensities = atoi(argv[3]);
+	Lidar lidar;
+	std::thread lidarThread([&](){
+		lidar.run();
+		});
 
-	laser.setSerialPort(port);
-	laser.setSerialBaudrate(baud);
-	laser.setIntensities(intensities);
-	printf("Set Serial Port\n");
-	return 1;
+	std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+	std::vector<float> data = lidar.getRanges();
+	for(int i=0; i<(unsigned int)data.size(); i++){
+		std::cout << "[main.cpp] " << i << ": " << data[i] << std::endl;
+	}
+	
+	lidar.stop();
+	lidarThread.join();
+
+	std::cout << "[main.cpp] Thread joined" << std::endl;
+
+
+	return 0;
     DronecodeSDK dc;
     std::string connection_url;
     ConnectionResult connection_result;
