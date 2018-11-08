@@ -1,5 +1,16 @@
 #pragma once
 
+/*
+*	(Pure virtual class)
+*	This class for Stoppable thread.
+*	inherited this class and implement run function.
+*	When you want to stop thread, call the stop function of this class.
+*
+*	ref) https://thispointer.com/c11-how-to-stop-or-terminate-a-thread/
+*/
+
+
+
 #include<iostream>
 #include<future>
 #include<thread>

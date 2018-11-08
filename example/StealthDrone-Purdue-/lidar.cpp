@@ -17,9 +17,11 @@ void Lidar::run(){
 
 void Lidar::stop(){
 	running = true;
-	Stoppable::stop();
+	Stoppable::stop(); // This is from super class and it's necessary.
 
 	std::cout << "[Lidar.cpp] Lidar geting shutdown" << std::endl;
+
+	// These are from Lidar SDK.
 	laser.turnOff();
 	laser.disconnecting();
 }

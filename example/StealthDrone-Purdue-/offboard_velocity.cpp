@@ -177,12 +177,18 @@ void usage(std::string bin_name)
 
 int main(int argc, char **argv)
 {
+	// Without constructor params, Lidar would have /dev/ttyUSB0 port, 128000 baudrate, no intensities check
 	Lidar lidar;
+
+	// Make thread to run Lidar.
 	std::thread lidarThread([&](){
 		lidar.run();
 		});
 
+	// We need some time for launching Lidar.
 	std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+
+	// When you get data from Lidar, call getRanges from lidar instance.
 	std::vector<float> data = lidar.getRanges();
 	for(int i=0; i<(unsigned int)data.size(); i++){
 		std::cout << "[main.cpp] " << i << ": " << data[i] << std::endl;
