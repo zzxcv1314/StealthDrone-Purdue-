@@ -1,2 +1,4 @@
-build
-build/
+*.pc
+*.cmake
+CMakeFiles
+CMakeCache.txt

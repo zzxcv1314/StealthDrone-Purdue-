@@ -1,9 +1,23 @@
 # StealthDrone-Purdue-
 Stealth Drone Project @Purdue University 2018 Fall 
 
+This is Combined SDK from Dronecode SDK and YDLidar SDK.
+
+Dronecode SDK:
+https://github.com/Dronecode/DronecodeSDK
+
+YDLidar SDK:
+http://ydlidar.com/download
 
 # Instruction
 ```
+$ cmake .
+$ make
+```
+To execute a example.
+```
+$ cd example
+$ cd StealthDrone-Purdue-
 $ mkdir build
 $ cd build
 $ cmake ..
