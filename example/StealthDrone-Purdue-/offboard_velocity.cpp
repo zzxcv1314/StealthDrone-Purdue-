@@ -1,10 +1,13 @@
 /**
  * @file offboard_velocity.cpp
- * @brief Example that demonstrates offboard velocity control in local NED and body coordinates
+ * @brief Autonomous drone built from offboard_velocity, fly_mission with YDLidar.
  *
  * @authors Author: Julian Oes <julian@oes.ch>,
  *                  Shakthi Prashanth <shakthi.prashanth.m@intel.com>
- * @date 2017-10-17
+ *					Daeun Choe
+ *					Jiyeon Oh
+ *					Chanhui yun
+ * @date 2018-00-00
  */
 
 #include <chrono>
@@ -13,14 +16,21 @@
 #include <dronecode_sdk/dronecode_sdk.h>
 #include <dronecode_sdk/offboard.h>
 #include <dronecode_sdk/telemetry.h>
+#include <dronecode_sdk/mission.h>
 #include <iostream>
 #include <thread>
+#include <future>
+#include <memory>
 #include "lidar.h"
 
 using namespace dronecode_sdk;
-using std::this_thread::sleep_for;
-using std::chrono::milliseconds;
-using std::chrono::seconds;
+using namespace std::placeholders;
+using namespace std::chrono;
+using namespace std::this_thread;
+
+//using std::this_thread::sleep_for;
+//using std::chrono::milliseconds;
+//using std::chrono::seconds;
 
 #define ERROR_CONSOLE_TEXT "\033[31m" // Turn text on console red
 #define TELEMETRY_CONSOLE_TEXT "\033[34m" // Turn text on console blue
@@ -46,6 +56,16 @@ inline void offboard_error_exit(Offboard::Result result, const std::string &mess
     }
 }
 
+// Handles Mission's result
+inline void handle_mission_err_exit(Mission::Result result, const std::string &message)
+{
+    if (result != Mission::Result::SUCCESS) {
+        std::cerr << ERROR_CONSOLE_TEXT << message << Mission::result_str(result)
+                  << NORMAL_CONSOLE_TEXT << std::endl;
+        exit(EXIT_FAILURE);
+    }
+}
+
 // Handles connection result
 inline void connection_error_exit(ConnectionResult result, const std::string &message)
 {
@@ -54,6 +74,23 @@ inline void connection_error_exit(ConnectionResult result, const std::string &me
                   << NORMAL_CONSOLE_TEXT << std::endl;
         exit(EXIT_FAILURE);
     }
+}
+
+// MAKE_MISSION_ITEM
+std::shared_ptr<MissionItem> make_mission_item(double latitude_deg, double longitude_deg,
+												float relative_altitude_m, float speed_m_s,
+												bool is_fly_through, float gimbal_pitch_deg,
+												float gimbal_yaw_deg, MissionItem::CameraAction camera_action)
+{
+	std::shared_ptr<MissionItem> new_item(new MissionItem());
+	new_item->set_position(latitude_deg, longitude_deg);
+	new_item->set_relative_altitude(relative_altitude_m);
+	new_item->set_speed(speed_m_s);
+	new_item->set_fly_through(is_fly_through);
+	new_item->set_gimbal_pitch_and_yaw(gimbal_pitch_deg, gimbal_yaw_deg);
+	new_item->set_camera_action(camera_action);
+
+	return new_item;
 }
 
 // Logs during Offboard control
@@ -202,24 +239,37 @@ int main(int argc, char **argv)
 
 	return 0;
     DronecodeSDK dc;
-    std::string connection_url;
-    ConnectionResult connection_result;
+	{
+    	std::string connection_url;
+    	ConnectionResult connection_result;
+
+		auto prom = std::make_shared<std::promise<void>>();
+		auto future_result = prom->get_future();
+
+		std::cout << "Waiting to discover system..." << std::endl;
+		dc.register_on_discover([prom](uint64_t uuid) {
+				std::cout << "Discovered system with UUID:" << uuid << std::endl;
+				prom->set_value();
+				});
 
 
-    if (argc == 2) {
-        connection_url = argv[1];
-        connection_result = dc.add_any_connection(connection_url);
-    } else {
-        usage(argv[0]);
-        return 1;
-    }
+    	if (argc == 2) {
+        	connection_url = argv[1];
+        	connection_result = dc.add_any_connection(connection_url);
+	    } else {
+    	    usage(argv[0]);
+        	return 1;
+    	}
 
-    if (connection_result != ConnectionResult::SUCCESS) {
-        std::cout << ERROR_CONSOLE_TEXT
-                  << "Connection failed: " << connection_result_str(connection_result)
-                  << NORMAL_CONSOLE_TEXT << std::endl;
-        return 1;
-    }
+    	if (connection_result != ConnectionResult::SUCCESS) {
+        	std::cout << ERROR_CONSOLE_TEXT
+            	      << "Connection failed: " << connection_result_str(connection_result)
+                	  << NORMAL_CONSOLE_TEXT << std::endl;
+        	return 1;
+    	}
+
+		future_result.get();
+	}
 
     // Wait for the system to connect via heartbeat
     while (!dc.is_connected()) {

@@ -39,6 +39,7 @@ target_link_libraries(offboard
     dronecode_sdk_action
     dronecode_sdk_offboard
     dronecode_sdk_telemetry
+	dronecode_sdk_mission
     ${YDLIDAR_LIBRARIES}
 	${CMAKE_THREAD_LIBS_INIT}
 )
