@@ -13,7 +13,7 @@ http://ydlidar.com/download
 $ cmake .
 $ make
 ```
-To execute a example.
+To execute a example on simulator.
 ```
 $ cd example
 $ cd StealthDrone-Purdue-
@@ -21,10 +21,14 @@ $ mkdir build
 $ cd build
 $ cmake ..
 $ make
-$ ./offboard
+$ ./offboard udp://:14540
 ```
 
 # NOTICE
+- Basic Info
+1. Simulator Position
+	lat: 47.3978, lon: 8.54561
+	
 - CMakeList.txt
 1. Add include directories.
 2. Modify definitions.

@@ -214,6 +214,8 @@ void usage(std::string bin_name)
 
 int main(int argc, char **argv)
 {
+	/*
+
 	// Without constructor params, Lidar would have /dev/ttyUSB0 port, 128000 baudrate, no intensities check
 	Lidar lidar;
 
@@ -238,6 +240,9 @@ int main(int argc, char **argv)
 
 
 	return 0;
+
+	*/
+
     DronecodeSDK dc;
 	{
     	std::string connection_url;
@@ -271,6 +276,12 @@ int main(int argc, char **argv)
 		future_result.get();
 	}
 
+	dc.register_on_timeout([](uint64_t uuid){
+			std::cout << "System with UUID timed out: " << uuid << std::endl;
+			std::cout << "Exiting." << std::endl;
+			exit(0);
+			});
+
     // Wait for the system to connect via heartbeat
     while (!dc.is_connected()) {
         std::cout << "Wait for system to connect via heartbeat" << std::endl;
@@ -281,6 +292,7 @@ int main(int argc, char **argv)
     System &system = dc.system();
     auto action = std::make_shared<Action>(system);
     auto offboard = std::make_shared<Offboard>(system);
+	auto mission = std::make_shared<Mission>(system);
     auto telemetry = std::make_shared<Telemetry>(system);
 
     while (!telemetry->health_all_ok()) {
@@ -288,34 +300,172 @@ int main(int argc, char **argv)
         sleep_for(seconds(1));
     }
     std::cout << "System is ready" << std::endl;
+	std::cout << "Creating and uploading mission" << std::endl;
 
-    ActionResult arm_result = action->arm();
+
+	//-----------------------Creating mission-----------------------------------
+	std::vector<std::shared_ptr<MissionItem>> mission_items;
+
+	mission_items.push_back( make_mission_item(47.398170327054473,
+												8.5456490218639658,
+												10.0f,
+												5.0f,
+												false,
+												20.0f,
+												60.0f,
+												MissionItem::CameraAction::NONE) );
+
+	mission_items.push_back( make_mission_item(47.398241338125118,
+												8.5455360114574332,
+												10.0f,
+												2.0f,
+												false,
+												0.0f,
+												-60.0f,
+												MissionItem::CameraAction::NONE) );
+
+	std::cout << "Uploading mission..." << std::endl;
+	auto prom = std::make_shared<std::promise<Mission::Result>>();
+	auto future_result = prom->get_future();
+	mission->upload_mission_async(mission_items,
+									[prom](Mission::Result result){
+									prom->set_value(result);
+									});
+
+	const Mission::Result result = future_result.get();
+	if( result != Mission::Result::SUCCESS ){
+		std::cout << "Mission upload failed (" << Mission::result_str(result) << "), exiting." << std::endl;
+		return 1;
+	}
+	std::cout << "Mission uploaded." << std::endl;
+
+
+	//--------------------------------------------------------------------------
+	
+
+	std::cout << "Arming..." << std::endl;
+    const ActionResult arm_result = action->arm();
     action_error_exit(arm_result, "Arming failed");
     std::cout << "Armed" << std::endl;
 
-    ActionResult takeoff_result = action->takeoff();
+	std::atomic<bool> want_to_pause{false};
+	// Before starting the mission, we want to be sure to subscribe to the mission progress.
+	mission->subscribe_progress([&want_to_pause](int current, int total){
+			std::cout << "Mission status update: " << current << "/" << total << std::endl;
+			if( current >= 1 ){
+				// We can only set a flag here. If we do more request inside the callback,
+				// We risk blocking the system.
+				want_to_pause = true;
+			}
+		});
+
+    const ActionResult takeoff_result = action->takeoff();
     action_error_exit(takeoff_result, "Takeoff failed");
     std::cout << "In Air..." << std::endl;
-    sleep_for(seconds(5));
+    sleep_for(seconds(10));
 
-    //  using local NED co-ordinates
+	{
+		std::cout << "Starting mission." << std::endl;
+		auto prom = std::make_shared<std::promise<Mission::Result>>();
+		auto future_result = prom->get_future();
+		mission->start_mission_async([prom](Mission::Result result) {
+				prom->set_value(result);
+				std::cout << "Started mission." << std::endl;
+				});
+
+		const Mission::Result result = future_result.get();
+		handle_mission_err_exit(result, "Mission start failed: ");
+	}
+
+	while(!want_to_pause){
+		sleep_for(seconds(1));
+	}
+
+	{
+		auto prom = std::make_shared<std::promise<Mission::Result>>();
+		auto future_result = prom->get_future();
+
+		std::cout << "Pausing mission..." << std::endl;
+		mission->pause_mission_async([prom](Mission::Result result){ 
+				prom->set_value(result);
+				});
+
+		const Mission::Result result = future_result.get();
+		if(result != Mission::Result::SUCCESS) {
+			std::cout << "Failed to pause mission (" << Mission::result_str(result) << ")" << std::endl;
+		} else {
+			std::cout << "Mission paused." << std::endl;
+		}
+	}
+
+	sleep_for(seconds(5));
+
     bool ret = offb_ctrl_ned(offboard);
     if (ret == false) {
         return EXIT_FAILURE;
     }
 
-    //  using body co-ordinates
-    ret = offb_ctrl_body(offboard);
-    if (ret == false) {
-        return EXIT_FAILURE;
-    }
+	{
+		auto prom = std::make_shared<std::promise<Mission::Result>>();
+		auto future_result = prom->get_future();
 
-    const ActionResult land_result = action->land();
-    action_error_exit(land_result, "Landing failed");
+		std::cout << "Resuming mission..." << std::endl;
+		mission->start_mission_async([prom](Mission::Result result){
+				prom->set_value(result);
+				});
+
+		const Mission::Result result = future_result.get();
+		if( result != Mission::Result::SUCCESS) {
+			std::cout << "Failed to resume mission (" << Mission::result_str(result) << ")" << std::endl;
+		} else {
+			std::cout << "Resumed mission." << std::endl;
+		}
+	}
+
+
+	while (!mission->mission_finished()){
+		sleep_for(seconds(1));
+	}
+
+	{
+		std::cout << "Commanding RTL..." << std::endl;
+		const ActionResult result = action->return_to_launch();
+		if( result != ActionResult::SUCCESS) {
+			std::cout << "Failed to command RTL (" << action_result_str(result) << ")" << std::endl;
+		} else {
+			std::cout << "Commanded RTL." << std::endl;
+		}
+	}
+
+	sleep_for(seconds(2));
+
+	while( telemetry->armed()){
+		sleep_for(seconds(1));
+	}
+	std::cout << "Disarmed, exiting" << std::endl;
+
+
+	//std::cout << "[INFO] Position: " << telemetry->position() << std::endl;
+
+    //  using local NED co-ordinates
+    //bool ret = offb_ctrl_ned(offboard);
+    //if (ret == false) {
+    //    return EXIT_FAILURE;
+    //}
+
+    //  using body co-ordinates
+    //ret = offb_ctrl_body(offboard);
+    //if (ret == false) {
+    //    return EXIT_FAILURE;
+    //}
+
+
+    //const ActionResult land_result = action->land();
+    //action_error_exit(land_result, "Landing failed");
 
     // We are relying on auto-disarming but let's keep watching the telemetry for a bit longer.
-    sleep_for(seconds(10));
-    std::cout << "Landed" << std::endl;
+    //sleep_for(seconds(10));
+    //std::cout << "Landed" << std::endl;
 
     return EXIT_SUCCESS;
 }
