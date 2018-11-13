@@ -37,7 +37,7 @@ using namespace std::this_thread;
 #define NORMAL_CONSOLE_TEXT "\033[0m" // Restore normal console colour
 
 // Handles Action's result
-inline void action_error_exit(ActionResult result, const std::string &message)
+inline void handle_action_err_exit(ActionResult result, const std::string &message)
 {
     if (result != ActionResult::SUCCESS) {
         std::cerr << ERROR_CONSOLE_TEXT << message << action_result_str(result)
@@ -212,6 +212,45 @@ void usage(std::string bin_name)
               << "For example, to connect to the simulator use URL: udp://:14540" << std::endl;
 }
 
+template <typename T>
+void startMission(T &mission) {
+	std::cout << "Starting/Resuming mission." << std::endl;
+	auto prom = std::make_shared<std::promise<Mission::Result>>();
+	auto future_result = prom->get_future();
+	mission->start_mission_async([prom](Mission::Result result) {
+			prom->set_value(result);
+			//std::cout << "Started mission." << std::endl;
+			});
+
+	const Mission::Result result = future_result.get();
+	handle_mission_err_exit(result, "Mission start failed: ");
+	std::cout << "Mission started/resumed" << std::endl;
+}
+
+template <typename T>
+void pauseMission(T &mission){
+	auto prom = std::make_shared<std::promise<Mission::Result>>();
+	auto future_result = prom->get_future();
+
+	std::cout << "Pausing mission..." << std::endl;
+	mission->pause_mission_async([prom](Mission::Result result){ 
+			prom->set_value(result);
+			});
+
+	const Mission::Result result = future_result.get();
+	handle_mission_err_exit(result, "Mission pause failed: ");
+	std::cout << "Mission Paused" << std::endl;
+}
+
+template <typename T>
+void commandRTL(T &action){
+	std::cout << "Commanding RTL..." << std::endl;
+	const ActionResult result = action->return_to_launch();
+	handle_action_err_exit(result, "Failed to command RTL");
+	std::cout << "Commanded RTL." << std::endl;
+}
+
+
 int main(int argc, char **argv)
 {
 	/*
@@ -338,14 +377,12 @@ int main(int argc, char **argv)
 		return 1;
 	}
 	std::cout << "Mission uploaded." << std::endl;
-
-
-	//--------------------------------------------------------------------------
+	//----------------------------------------------------------------------------
 	
 
 	std::cout << "Arming..." << std::endl;
     const ActionResult arm_result = action->arm();
-    action_error_exit(arm_result, "Arming failed");
+    handle_action_err_exit(arm_result, "Arming failed");
     std::cout << "Armed" << std::endl;
 
 	std::atomic<bool> want_to_pause{false};
@@ -360,82 +397,40 @@ int main(int argc, char **argv)
 		});
 
     const ActionResult takeoff_result = action->takeoff();
-    action_error_exit(takeoff_result, "Takeoff failed");
+    handle_action_err_exit(takeoff_result, "Takeoff failed");
     std::cout << "In Air..." << std::endl;
     sleep_for(seconds(10));
 
-	{
-		std::cout << "Starting mission." << std::endl;
-		auto prom = std::make_shared<std::promise<Mission::Result>>();
-		auto future_result = prom->get_future();
-		mission->start_mission_async([prom](Mission::Result result) {
-				prom->set_value(result);
-				std::cout << "Started mission." << std::endl;
-				});
+	
+	startMission(mission);
 
-		const Mission::Result result = future_result.get();
-		handle_mission_err_exit(result, "Mission start failed: ");
-	}
-
+	/*
+	 * Checking for pause by busy waiting.  
+	 * [TODO]
+	 * When we use Lidar data, modified these three line. 
+	 */
 	while(!want_to_pause){
 		sleep_for(seconds(1));
 	}
 
-	{
-		auto prom = std::make_shared<std::promise<Mission::Result>>();
-		auto future_result = prom->get_future();
-
-		std::cout << "Pausing mission..." << std::endl;
-		mission->pause_mission_async([prom](Mission::Result result){ 
-				prom->set_value(result);
-				});
-
-		const Mission::Result result = future_result.get();
-		if(result != Mission::Result::SUCCESS) {
-			std::cout << "Failed to pause mission (" << Mission::result_str(result) << ")" << std::endl;
-		} else {
-			std::cout << "Mission paused." << std::endl;
-		}
-	}
+	pauseMission(mission);
+	
 
 	sleep_for(seconds(5));
 
+    //  using local NED co-ordinates
     bool ret = offb_ctrl_ned(offboard);
     if (ret == false) {
         return EXIT_FAILURE;
     }
 
-	{
-		auto prom = std::make_shared<std::promise<Mission::Result>>();
-		auto future_result = prom->get_future();
-
-		std::cout << "Resuming mission..." << std::endl;
-		mission->start_mission_async([prom](Mission::Result result){
-				prom->set_value(result);
-				});
-
-		const Mission::Result result = future_result.get();
-		if( result != Mission::Result::SUCCESS) {
-			std::cout << "Failed to resume mission (" << Mission::result_str(result) << ")" << std::endl;
-		} else {
-			std::cout << "Resumed mission." << std::endl;
-		}
-	}
-
+	startMission(mission);
 
 	while (!mission->mission_finished()){
 		sleep_for(seconds(1));
 	}
 
-	{
-		std::cout << "Commanding RTL..." << std::endl;
-		const ActionResult result = action->return_to_launch();
-		if( result != ActionResult::SUCCESS) {
-			std::cout << "Failed to command RTL (" << action_result_str(result) << ")" << std::endl;
-		} else {
-			std::cout << "Commanded RTL." << std::endl;
-		}
-	}
+	commandRTL(action);
 
 	sleep_for(seconds(2));
 

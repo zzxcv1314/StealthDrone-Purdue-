@@ -49,11 +49,11 @@ And after add_executable write this.
 target_link_libraries({PRJ NAME} ${CMAKE_THREAD_LIBS_INIT})
 ```
 
-- YDLidar X4
-X4 has 720 Elements that is vector<float>
-
-indexes list
-630~89: North
-90~269: West
-270~449: South
-450~629: East
+- YDLidar X4 \
+X4 has 720 Elements that is vector<float> \
+\
+Indexes list \
+630 ~ 89: North \
+90 ~ 269: West \
+270 ~ 449: South \
+450 ~ 629: East
