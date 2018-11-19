@@ -7,7 +7,28 @@ void Lidar::run(){
 		bool hardError = false;
 
 		if( laser.doProcessSimple(scan, hardError) ){
-			;
+			if( count == 0 ){
+				meanOfRanges = scan.ranges;
+			} else {
+				for(int i=0; i<(unsigned int)scan.ranges.size(); i++){
+					if( scan.ranges[i] > 0.01f ){
+						meanOfRanges[i] += scan.ranges[i];
+					} else {
+						meanOfRanges[i] += prevRanges[i];
+					}
+				}
+			}
+			prevRanges = scan.ranges;
+
+			count++;
+			if( count > 5 ){
+				count = 0;
+				for( int i=0; i<(unsigned int)meanOfRanges.size(); i++){
+					meanOfRanges[i] = meanOfRanges[i]/5.0f;
+				}
+				meanOfRanges.clear();
+			}
+			
 		}
 		usleep(50*1000);
 	}

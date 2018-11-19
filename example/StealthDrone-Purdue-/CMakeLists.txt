@@ -31,6 +31,7 @@ endif()
 add_executable(offboard
     offboard_velocity.cpp
 	lidar.cpp
+	obstacleMap.cpp
 )
 
 

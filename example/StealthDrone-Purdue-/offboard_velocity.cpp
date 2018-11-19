@@ -22,6 +22,7 @@
 #include <future>
 #include <memory>
 #include "lidar.h"
+#include "obstacleMap.h"
 
 using namespace dronecode_sdk;
 using namespace std::placeholders;
@@ -281,6 +282,8 @@ int main(int argc, char **argv)
 	return 0;
 
 	*/
+
+	ObstacleMap OM;
 
     DronecodeSDK dc;
 	{

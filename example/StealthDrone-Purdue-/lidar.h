@@ -1,5 +1,9 @@
 #pragma once
 
+/**
+  * @brief wrapper class for CYdlidar.
+  */
+
 #include"CYdLidar.h"
 #include"stoppableThread.h"
 #include<iostream>
@@ -7,6 +11,7 @@
 #include<signal.h>
 #include<memory>
 #include<unistd.h>
+#include<vector>
 
 using namespace std;
 using namespace ydlidar;
@@ -36,6 +41,10 @@ class Lidar : public Stoppable{
 	//		information of Lidar intensities, default baud is 0 for X4.
 	int intensities;
 
+	std::vector<float> meanOfRanges;
+	std::vector<float> prevRanges;
+	int count;
+
 private:
 	// @method	Stop
 	// @param 	signo
@@ -55,6 +64,7 @@ public:
 		port(p), baud(b), intensities(i)
 	{
 		running = false;
+		count = 0; 
 
 		signal(SIGINT, Stop);
 		signal(SIGTERM, Stop);
@@ -80,7 +90,7 @@ public:
 
 	// @method	getRanges
 	// @return	range information from Lidar, it contains 720 elements of distance.
-	std::vector<float> getRanges(){ return scan.ranges; }
+	std::vector<float> getRanges(){ return meanOfRanges; }
 };
 
 
