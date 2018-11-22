@@ -6,6 +6,10 @@ void Lidar::run(){
 	while(!running){
 		bool hardError = false;
 
+		if( countComplete == true )
+			continue;
+
+
 		if( laser.doProcessSimple(scan, hardError) ){
 			if( count == 0 ){
 				meanOfRanges = scan.ranges;
@@ -22,6 +26,7 @@ void Lidar::run(){
 
 			count++;
 			if( count > 5 ){
+				countComplete = true;
 				count = 0;
 				for( int i=0; i<(unsigned int)meanOfRanges.size(); i++){
 					meanOfRanges[i] = meanOfRanges[i]/5.0f;

@@ -44,6 +44,7 @@ class Lidar : public Stoppable{
 	std::vector<float> meanOfRanges;
 	std::vector<float> prevRanges;
 	int count;
+	bool countComplete;
 
 private:
 	// @method	Stop
@@ -65,9 +66,10 @@ public:
 	{
 		running = false;
 		count = 0; 
+		countComplete = false;
 
-		signal(SIGINT, Stop);
-		signal(SIGTERM, Stop);
+		//signal(SIGINT, Stop);
+		//signal(SIGTERM, Stop);
 
 		laser.setSerialPort(port);
 		laser.setSerialBaudrate(baud);
@@ -90,7 +92,13 @@ public:
 
 	// @method	getRanges
 	// @return	range information from Lidar, it contains 720 elements of distance.
-	std::vector<float> getRanges(){ return meanOfRanges; }
+	//std::vector<float> getRanges(){ return meanOfRanges; }
+	float* getRanges(){ return &meanOfRanges[0]; }
+
+	void setCountComplete(bool b){ countComplete = b; }
+	bool getCountComplete(){ return countComplete; }
+
+	bool getRunningStatus(){ return running;}
 };
 
 

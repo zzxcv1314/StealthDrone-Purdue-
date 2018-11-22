@@ -15,7 +15,7 @@
 #include <vector>
 
 
-#define TO_RADIAN(x) ((x)*180.0f)/3.1415f
+#define TO_RADIAN(x) ((x)*3.1415f)/180.0f
 
 class ObstacleMap{
 	/**
@@ -28,6 +28,7 @@ class ObstacleMap{
 	 * The reason for not real-time processing is due to the operation speed.
 	 */
 	float cosValue[180];
+	float sinValue[180];
 
 public:
 	ObstacleMap(){
@@ -39,6 +40,7 @@ public:
 
 		for(int i=0; i<180; i++){
 			cosValue[i] = cos(TO_RADIAN(i*0.5));
+			sinValue[i] = sin(TO_RADIAN(i*0.5));
 		}
 	};
 
@@ -49,7 +51,8 @@ public:
 	/**
 	 * @param ranges is float vector from lidar scan.
 	 */
-	void determineMapInfo(std::vector<float> &ranges);
+	//void determineMapInfo(std::vector<float> ranges);
+	void determineMapInfo(float *ranges);
 	int (*getObstacleMap())[5]{ return obstacleMap; }
 
 private:

@@ -100,107 +100,24 @@ inline void offboard_log(const std::string &offb_mode, const std::string msg)
     std::cout << "[" << offb_mode << "] " << msg << std::endl;
 }
 
-/**
- * Does Offboard control using NED co-ordinates.
- *
- * returns true if everything went well in Offboard control, exits with a log otherwise.
- */
-bool offb_ctrl_ned(std::shared_ptr<dronecode_sdk::Offboard> offboard)
+bool offb_ctrl_ned(std::shared_ptr<dronecode_sdk::Offboard> offboard, dronecode_sdk::Offboard::VelocityNEDYaw v)
 {
-    const std::string offb_mode = "NED";
-    // Send it once before starting offboard, otherwise it will be rejected.
+	const std::string offb_mode = "NED";
+
     offboard->set_velocity_ned({0.0f, 0.0f, 0.0f, 0.0f});
 
     Offboard::Result offboard_result = offboard->start();
     offboard_error_exit(offboard_result, "Offboard start failed");
     offboard_log(offb_mode, "Offboard started");
 
-    offboard_log(offb_mode, "Turn to face East");
-    offboard->set_velocity_ned({0.0f, 0.0f, 0.0f, 90.0f});
-    sleep_for(seconds(1)); // Let yaw settle.
+	offboard->set_velocity_ned(v);
+	sleep_for(seconds(2));
 
-    {
-        const float step_size = 0.01f;
-        const float one_cycle = 2.0f * (float)M_PI;
-        const unsigned steps = 2 * unsigned(one_cycle / step_size);
+	offboard_result = offboard->stop();
+	offboard_error_exit(offboard_result, "Offboard stop failed: ");
+	offboard_log(offb_mode, "Offboard stopped");
 
-        offboard_log(offb_mode, "Go North and back South");
-        for (unsigned i = 0; i < steps; ++i) {
-            float vx = 5.0f * sinf(i * step_size);
-            offboard->set_velocity_ned({vx, 0.0f, 0.0f, 90.0f});
-            sleep_for(milliseconds(10));
-        }
-    }
-
-    offboard_log(offb_mode, "Turn to face West");
-    offboard->set_velocity_ned({0.0f, 0.0f, 0.0f, 270.0f});
-    sleep_for(seconds(2));
-
-    offboard_log(offb_mode, "Go up 2 m/s, turn to face South");
-    offboard->set_velocity_ned({0.0f, 0.0f, -2.0f, 180.0f});
-    sleep_for(seconds(4));
-
-    offboard_log(offb_mode, "Go down 1 m/s, turn to face North");
-    offboard->set_velocity_ned({0.0f, 0.0f, 1.0f, 0.0f});
-    sleep_for(seconds(4));
-
-    // Now, stop offboard mode.
-    offboard_result = offboard->stop();
-    offboard_error_exit(offboard_result, "Offboard stop failed: ");
-    offboard_log(offb_mode, "Offboard stopped");
-
-    return true;
-}
-
-/**
- * Does Offboard control using body co-ordinates.
- *
- * returns true if everything went well in Offboard control, exits with a log otherwise.
- */
-bool offb_ctrl_body(std::shared_ptr<dronecode_sdk::Offboard> offboard)
-{
-    const std::string offb_mode = "BODY";
-
-    // Send it once before starting offboard, otherwise it will be rejected.
-    offboard->set_velocity_body({0.0f, 0.0f, 0.0f, 0.0f});
-
-    Offboard::Result offboard_result = offboard->start();
-    offboard_error_exit(offboard_result, "Offboard start failed: ");
-    offboard_log(offb_mode, "Offboard started");
-
-    offboard_log(offb_mode, "Turn clock-wise and climb");
-    offboard->set_velocity_body({0.0f, 0.0f, -1.0f, 60.0f});
-    sleep_for(seconds(5));
-
-    offboard_log(offb_mode, "Turn back anti-clockwise");
-    offboard->set_velocity_body({0.0f, 0.0f, 0.0f, -60.0f});
-    sleep_for(seconds(5));
-
-    offboard_log(offb_mode, "Wait for a bit");
-    offboard->set_velocity_body({0.0f, 0.0f, 0.0f, 0.0f});
-    sleep_for(seconds(2));
-
-    offboard_log(offb_mode, "Fly a circle");
-    offboard->set_velocity_body({5.0f, 0.0f, 0.0f, 30.0f});
-    sleep_for(seconds(15));
-
-    offboard_log(offb_mode, "Wait for a bit");
-    offboard->set_velocity_body({0.0f, 0.0f, 0.0f, 0.0f});
-    sleep_for(seconds(5));
-
-    offboard_log(offb_mode, "Fly a circle sideways");
-    offboard->set_velocity_body({0.0f, -5.0f, 0.0f, 30.0f});
-    sleep_for(seconds(15));
-
-    offboard_log(offb_mode, "Wait for a bit");
-    offboard->set_velocity_body({0.0f, 0.0f, 0.0f, 0.0f});
-    sleep_for(seconds(8));
-
-    offboard_result = offboard->stop();
-    offboard_error_exit(offboard_result, "Offboard stop failed: ");
-    offboard_log(offb_mode, "Offboard stopped");
-
-    return true;
+	return true;
 }
 
 void usage(std::string bin_name)
@@ -251,6 +168,13 @@ void commandRTL(T &action){
 	std::cout << "Commanded RTL." << std::endl;
 }
 
+bool running = false;
+void Stop(int signo){
+	printf("[main.cpp] Received exit signal\n");
+	running = true;
+}
+
+
 
 int main(int argc, char **argv)
 {
@@ -282,8 +206,6 @@ int main(int argc, char **argv)
 	return 0;
 
 	*/
-
-	ObstacleMap OM;
 
     DronecodeSDK dc;
 	{
@@ -329,6 +251,18 @@ int main(int argc, char **argv)
         std::cout << "Wait for system to connect via heartbeat" << std::endl;
         sleep_for(seconds(1));
     }
+
+	signal(SIGINT, Stop);
+	signal(SIGTERM, Stop);
+
+	Lidar lidar;
+	ObstacleMap OM;
+
+	std::thread lidarThread([&](){
+		lidar.run();
+	});
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(3000));
 
     // System got discovered.
     System &system = dc.system();
@@ -405,29 +339,89 @@ int main(int argc, char **argv)
     sleep_for(seconds(10));
 
 	
-	startMission(mission);
+	//startMission(mission);
 
 	/*
 	 * Checking for pause by busy waiting.  
 	 * [TODO]
 	 * When we use Lidar data, modified these three line. 
 	 */
-	while(!want_to_pause){
-		sleep_for(seconds(1));
+	while( !lidar.getRunningStatus() && !running ){
+		//std::cout << "[INFO] " << telemetry->position() << std::endl;
+		if( lidar.getCountComplete() == true ){
+			OM.determineMapInfo(lidar.getRanges());
+			int (*map)[5] = OM.getObstacleMap();
+
+			/*for(int i=0; i<5; i++){
+				for(int j=0; j<5; j++){
+					printf("%d ", map[i][j]);
+				}
+				printf("\n");
+			}
+			printf("\n");*/
+
+			/*
+			 * Emergency Stop
+			 */
+			if( map[2][1] == 1 && map[1][1] == 1 && map[3][1] == 1 &&
+					map[1][2] == 1 && map[3][2] == 1 ){
+				running = true;
+			}
+			
+			/*
+			 * [TODO]
+			 * Get the most nearest way from the destination.
+			 * There are 5 options. (1,1), (2,1), (3,1), (1,2), (3,2)
+			 */
+			if(map[2][0] == 1){
+				pauseMission(mission);
+				if(map[1][1] == 0 && map[0][1] == 0){
+					//offb_ctrl_ned(offboard, {1.0f, 1.0f, 0.0f, 45.0f});
+					std::cout << "[LIDAR INFO]all clear move north-west" << std::endl;
+				} else if( map[1][3] == 0 && map[0][3] == 0){
+					//offb_ctrl_ned(offboard, {-1.0f, 1.0f, 0.0f, 135.0f});
+					std::cout << "[LIDAR INFO]all clear move north-east" << std::endl;
+				} else if( map[1][1] == 0 ){
+					std::cout << "[LIDAR INFO]move north-west" << std::endl;
+				} else if( map[1][3] == 0 ){
+					std::cout << "[LIDAR INFO]move north-east" << std::endl;
+				} else if( map[2][1] == 0 ){
+					std::cout << "[LIDAR INFO]move west" << std::endl;
+				} else if( map[2][3] == 0 ){
+					std::cout << "[LIDAR INFO]move east" << std::endl;
+				}
+			}
+
+			if(map[2][0] == 0 && map[2][1] == 0){
+				startMission(mission);
+			}
+
+			lidar.setCountComplete(false);
+		}
 	}
 
-	pauseMission(mission);
+	if( running ){
+		lidar.stop();
+		lidarThread.join();
+		exit(0);
+	}
+
+	/*while(!want_to_pause){
+		sleep_for(seconds(1));
+	}*/
+
+	//pauseMission(mission);
 	
 
-	sleep_for(seconds(5));
+	//sleep_for(seconds(5));
 
     //  using local NED co-ordinates
-    bool ret = offb_ctrl_ned(offboard);
-    if (ret == false) {
-        return EXIT_FAILURE;
-    }
+    //bool ret = offb_ctrl_ned(offboard);
+    //if (ret == false) {
+       // return EXIT_FAILURE;
+    //}
 
-	startMission(mission);
+	//startMission(mission);
 
 	while (!mission->mission_finished()){
 		sleep_for(seconds(1));
@@ -464,6 +458,9 @@ int main(int argc, char **argv)
     // We are relying on auto-disarming but let's keep watching the telemetry for a bit longer.
     //sleep_for(seconds(10));
     //std::cout << "Landed" << std::endl;
+
+	lidar.stop();
+	lidarThread.join();
 
     return EXIT_SUCCESS;
 }
